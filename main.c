@@ -10,16 +10,6 @@
 #define STB_C_LEXER_IMPLEMENTATION
 #include "stb_c_lexer.h"
 
-#define RAYWHITE   (Color){ 245, 245, 245, 255 }   // My own White (raylib logo)
-
-// Color, 4 components, R8G8B8A8 (32bit)
-typedef struct Color {
-    unsigned char r;        // Color red value
-    unsigned char g;        // Color green value
-    unsigned char b;        // Color blue value
-    unsigned char a;        // Color alpha value
-} Color;
-
 typedef void (*fn_t)(void);
 
 int main(void)
@@ -29,12 +19,11 @@ int main(void)
     ffi_cif cif = {0};
     ffi_type **atypes = NULL; /* array of arg type pointer */
     void **avalues = NULL;    /* array of arg value pointer */
+    const char *funcname;
     fn_t fn;                  /* function to call */
-    char buffer[128] = {0};   /* store input */
-    stb_lexer lexler = {0};
-
-
-    stb_c_lexer_init(&lexer, const char *input_stream, const char *input_stream_end, char *string_store, int store_length);
+    char inbuf[256];          /* store input */
+    char strbuf[64];          /* store string */
+    stb_lexer lex;
 
     raylib = dlopen("raylib/lib/libraylib.so", RTLD_NOW);
     if (!raylib) {
@@ -43,36 +32,54 @@ int main(void)
     }
 
     while (1) {
+        vec_reset(atypes);
+        vec_reset(avalues);
+        fn = NULL;
+        funcname = NULL;
+
         printf("> ");
         fflush(stdout);
-        if (!fgets(buffer, sizeof(buffer), stdin)) break;
-        printf("echo: %s", buffer);
+        if (!fgets(inbuf, sizeof(inbuf), stdin)) break;
 
-        #if 0
+        stb_c_lexer_init(&lex, inbuf, inbuf + strlen(inbuf), strbuf, sizeof(strbuf));
 
-        vec_push(atypes, &ffi_type_sint32);
-        vec_push(atypes, &ffi_type_sint32);
-        vec_push(atypes, &ffi_type_pointer);
+        temp_scope(1) {
+            while (stb_c_lexer_get_token(&lex)) {
+                switch (lex.token) {
+                case CLEX_parse_error:
+                    fprintf(stderr, "ERROR: failed to parse\n");
+                    goto end;
+                case CLEX_id:
+                    funcname = temp_strdup(lex.string);
+                    break;
+                case CLEX_dqstring: {
+                    const char **x = temp_alloc(sizeof(char *));
+                    *x = temp_strdup(lex.string);
+                    vec_push(avalues, (void *) x);
+                    vec_push(atypes, &ffi_type_pointer);
+                } break;
+                case CLEX_intlit: {
+                    int *x = temp_alloc(sizeof(int));
+                    *x = (int) lex.int_number;
+                    vec_push(avalues, (void *) x);
+                    vec_push(atypes, &ffi_type_sint32);
+                } break;
+                }
+            }
 
-        status = ffi_prep_cif(&cif, FFI_DEFAULT_ABI, vec_size(atypes), &ffi_type_void, atypes);
-        if (status != FFI_OK) {
-            fprintf(stderr, "ERROR: failed to call ffi_prep_cif()\n");
-            return 1;
+            if (vec_size(atypes) == 0) vec_push(atypes, &ffi_type_void);
+
+            if (!funcname) goto end;
+
+            status = ffi_prep_cif(&cif, FFI_DEFAULT_ABI, vec_size(atypes), &ffi_type_void, atypes);
+            if (status != FFI_OK) {
+                fprintf(stderr, "ERROR: failed to call ffi_prep_cif()\n");
+                return 1;
+            }
+            fn = (fn_t) dlsym(raylib, funcname);
+            ffi_call(&cif, fn, NULL, avalues);
+end:
         }
-
-        fn = (fn_t)dlsym(raylib, "InitWindow");
-
-        int w = 100;
-        int h = 100;
-        const char *title = "hello from libffi";
-
-        vec_push(avalues, &w);
-        vec_push(avalues, &h);
-        vec_push(avalues, &title);
-
-        ffi_call(&cif, fn, NULL, avalues);
-
-        #endif
     }
 
     if (atypes) vec_free(atypes);

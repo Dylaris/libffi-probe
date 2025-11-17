@@ -587,6 +587,7 @@ const char *cook_dll_geterr(void)
 #define OFFSET_OF          COOK_OFFSET_OF
 #define CONTAINER_OF       COOK_CONTAINER_OF
 
+#define temp_alloc         cook_temp_alloc
 #define temp_strdup        cook_temp_strdup
 #define temp_strndup       cook_temp_strndup
 #define temp_strsub        cook_temp_strsub

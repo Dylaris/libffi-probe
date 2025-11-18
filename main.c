@@ -12,6 +12,14 @@
 
 typedef void (*fn_t)(void);
 
+// Color, 4 components, R8G8B8A8 (32bit)
+typedef struct Color {
+    unsigned char r;        // Color red value
+    unsigned char g;        // Color green value
+    unsigned char b;        // Color blue value
+    unsigned char a;        // Color alpha value
+} Color;
+
 int main(void)
 {
     void *raylib;             /* dll handle */
@@ -24,6 +32,20 @@ int main(void)
     char inbuf[256];          /* store input */
     char strbuf[64];          /* store string */
     stb_lexer lex;
+    bool is_render_fn;        /* function to call is render? */
+    fn_t BeginDrawing;
+    fn_t EndDrawing;
+    ffi_type ffi_type_color;  /* raylib struct Color */
+
+    ffi_type_color.size = sizeof(Color);
+    ffi_type_color.alignment = 1;
+    ffi_type_color.type = FFI_TYPE_STRUCT;
+    ffi_type_color.elements = (ffi_type **) temp_alloc(sizeof(ffi_type*)*5);
+    ffi_type_color.elements[0] = &ffi_type_uint8;
+    ffi_type_color.elements[1] = &ffi_type_uint8;
+    ffi_type_color.elements[2] = &ffi_type_uint8;
+    ffi_type_color.elements[3] = &ffi_type_uint8;
+    ffi_type_color.elements[4] = NULL;
 
     raylib = dlopen("raylib/lib/libraylib.so", RTLD_NOW);
     if (!raylib) {
@@ -31,11 +53,15 @@ int main(void)
         return 1;
     }
 
+    BeginDrawing = dlsym(raylib, "BeginDrawing");
+    EndDrawing   = dlsym(raylib, "EndDrawing");
+
     while (1) {
         vec_reset(atypes);
         vec_reset(avalues);
         fn = NULL;
         funcname = NULL;
+        is_render_fn = false;
 
         printf("> ");
         fflush(stdout);
@@ -46,9 +72,6 @@ int main(void)
         temp_scope(1) {
             while (stb_c_lexer_get_token(&lex)) {
                 switch (lex.token) {
-                case CLEX_parse_error:
-                    fprintf(stderr, "ERROR: failed to parse\n");
-                    goto end;
                 case CLEX_id:
                     funcname = temp_strdup(lex.string);
                     break;
@@ -64,6 +87,19 @@ int main(void)
                     vec_push(avalues, (void *) x);
                     vec_push(atypes, &ffi_type_sint32);
                 } break;
+                default:
+                    if (lex.token == '!') {
+                        is_render_fn = true;
+                    } else if (lex.token == '@') {
+                        /* parse to Color */
+                        Color *color = temp_alloc(sizeof(Color));
+                        stb_c_lexer_get_token(&lex); color->r = (unsigned char) lex.int_number;
+                        stb_c_lexer_get_token(&lex); color->g = (unsigned char) lex.int_number;
+                        stb_c_lexer_get_token(&lex); color->b = (unsigned char) lex.int_number;
+                        color->a = 0xff;
+                        vec_push(avalues, (void *) color);
+                        vec_push(atypes, &ffi_type_color);
+                    }
                 }
             }
 
@@ -76,8 +112,11 @@ int main(void)
                 fprintf(stderr, "ERROR: failed to call ffi_prep_cif()\n");
                 return 1;
             }
+
             fn = (fn_t) dlsym(raylib, funcname);
+            if (is_render_fn) BeginDrawing();
             ffi_call(&cif, fn, NULL, avalues);
+            if (is_render_fn) EndDrawing();
 end:
         }
     }

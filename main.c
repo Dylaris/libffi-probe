@@ -32,9 +32,6 @@ int main(void)
     char inbuf[256];          /* store input */
     char strbuf[64];          /* store string */
     stb_lexer lex;
-    bool is_render_fn;        /* function to call is render? */
-    fn_t BeginDrawing;
-    fn_t EndDrawing;
     ffi_type ffi_type_color;  /* raylib struct Color */
 
     ffi_type_color.size = sizeof(Color);
@@ -53,15 +50,11 @@ int main(void)
         return 1;
     }
 
-    BeginDrawing = dlsym(raylib, "BeginDrawing");
-    EndDrawing   = dlsym(raylib, "EndDrawing");
-
     while (1) {
         vec_reset(atypes);
         vec_reset(avalues);
         fn = NULL;
         funcname = NULL;
-        is_render_fn = false;
 
         printf("> ");
         fflush(stdout);
@@ -88,15 +81,13 @@ int main(void)
                     vec_push(atypes, &ffi_type_sint32);
                 } break;
                 default:
-                    if (lex.token == '!') {
-                        is_render_fn = true;
-                    } else if (lex.token == '@') {
+                    if (lex.token == '@') {
                         /* parse to Color */
                         Color *color = temp_alloc(sizeof(Color));
                         stb_c_lexer_get_token(&lex); color->r = (unsigned char) lex.int_number;
                         stb_c_lexer_get_token(&lex); color->g = (unsigned char) lex.int_number;
                         stb_c_lexer_get_token(&lex); color->b = (unsigned char) lex.int_number;
-                        color->a = 0xff;
+                        stb_c_lexer_get_token(&lex); color->a = (unsigned char) lex.int_number;
                         vec_push(avalues, (void *) color);
                         vec_push(atypes, &ffi_type_color);
                     }
@@ -114,9 +105,7 @@ int main(void)
             }
 
             fn = (fn_t) dlsym(raylib, funcname);
-            if (is_render_fn) BeginDrawing();
-            ffi_call(&cif, fn, NULL, avalues);
-            if (is_render_fn) EndDrawing();
+            if (fn) ffi_call(&cif, fn, NULL, avalues);
 end:
         }
     }

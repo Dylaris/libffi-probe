@@ -13,31 +13,29 @@ $ ./nob
 
 **Rule:**
 
-1. **Setting functions** (e.g., SetWindowPosition, SetWindowSize): Call directly
+1. **Function call**
    ```
    func params ...
    ```
 
-2. **Render functions** (e.g., ClearBackground, DrawText): Prefix with `!`
-   ```
-   ! func params ...
-   ```
+2. **Supported types**: int, string, Color
 
-3. **Supported types**: int, string, Color
-
-4. **Color format**: `@ r g b`
+3. **Color format**: `@ r g b a`
    ```
-   @ 255 0 0    # Red color
+   @ 255 0 0 255   # Red color
    ```
 
 **Example:**
 ```
 > InitWindow 640 480 "hello, world"
 > SetWindowSize 800 600
-> ! ClearBackground @ 255 255 255
-> ! DrawText "Hello" 100 100 20 @ 0 0 255
+> BeginDrawing
+> ClearBackground @ 255 0 0 255
+> DrawText "Hello" 100 100 20 @ 0 0 255
+> EndDrawing
 > CloseWindow
 ```
+
 ## Reference
 
 - [Tsoding Daily: This Library is a Hidden Gem](https://www.youtube.com/watch?v=0o8Ex8mXigU)
